@@ -18,7 +18,7 @@ def get_jobs():
     query = Job.query
 
     if job_type:
-        query = query.filter_by(job_type=job_type)
+        query = query.filter(Job.job_type.ilike(f"%{job_type}%")) 
     if location:
         query = query.filter(Job.location.ilike(f"%{location}%"))
     if tag:
@@ -47,7 +47,7 @@ def add_job():
             location=data["location"],
             posting_date=datetime.strptime(data["posting_date"], "%Y-%m-%d"),
             job_type=data["job_type"],
-            tags=",".join(data.get("tags", []))
+            tags=",".join(data.get("tags", []))  
         )
         db.session.add(job)
         db.session.commit()
@@ -64,9 +64,14 @@ def update_job(job_id):
     data = request.get_json()
     for field in ["title", "company", "location", "posting_date", "job_type", "tags"]:
         if field in data:
-            setattr(job, field, ",".join(data[field]) if field == "tags" else data[field])
+            if field == "tags":
+                setattr(job, field, ",".join(data[field]))
+            elif field == "posting_date":
+                setattr(job, field, datetime.strptime(data[field], "%Y-%m-%d"))
+            else:
+                setattr(job, field, data[field])
 
-    db.session.commit()
+    db.session.commit()  # Ensure changes are committed
     return jsonify(job.to_dict())
 
 @jobs_bp.route("/<int:job_id>", methods=["DELETE"])

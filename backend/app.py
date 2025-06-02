@@ -4,6 +4,7 @@ from flask_sqlalchemy import SQLAlchemy
 from models import db
 from routes import jobs_bp
 from dotenv import load_dotenv
+from sqlalchemy.sql import text
 import os
 
 load_dotenv()
@@ -22,7 +23,7 @@ app.register_blueprint(jobs_bp, url_prefix="/api/jobs")
 def health_check():
     try:
         with app.app_context():
-            db.session.execute("SELECT 1")
+            db.session.execute(text("SELECT 1"))
         return jsonify({"status": "App is running and database is connected!"}), 200
     except Exception as e:
         return jsonify({"status": "Error", "message": str(e)}), 500
