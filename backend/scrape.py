@@ -1,4 +1,3 @@
-# actuary_scraper_db.py
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -6,24 +5,21 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
-import psycopg2 # For PostgreSQL interaction
+import psycopg2
 from datetime import datetime, timedelta
 import time
 import re
 from bs4 import BeautifulSoup
 
-# --- Database Configuration ---
-# !!! IMPORTANT: Replace these with your actual PostgreSQL connection details !!!
 DB_CONFIG = {
     "dbname": "jobboard",
     "user": "postgres",
     "password": "70126633",
-    "host": "localhost",  # e.g., 'localhost' or an IP address
-    "port": "5432"   # e.g., '5432'
+    "host": "localhost",
+    "port": "5432"
 }
 
 def get_db_connection():
-    """Establishes a connection to the PostgreSQL database."""
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         print("Successfully connected to PostgreSQL database.")
@@ -33,10 +29,6 @@ def get_db_connection():
         return None
 
 def parse_posting_date(date_str_raw):
-    """
-    Parses various posting date string formats from Actuary List into a date object.
-    Examples: "Posted today", "Posted 1 day ago", "Posted on May 30", "6h ago", "1d ago", "1mo ago".
-    """
     date_str = date_str_raw.lower().replace('posted', '').strip()
     now = datetime.now()
 
@@ -49,25 +41,21 @@ def parse_posting_date(date_str_raw):
     elif "yesterday" in date_str or "1 day ago" in date_str:
         return (now - timedelta(days=1)).date()
 
-    # Handle "xh ago" (hours ago)
     hours_ago_match = re.match(r'(\d+)\s*h(ours?)?\s*ago', date_str)
     if hours_ago_match:
         hours = int(hours_ago_match.group(1))
         return (now - timedelta(hours=hours)).date()
 
-    # Handle "xd ago" (days ago)
     days_ago_match = re.match(r'(\d+)\s*d(ays?)?\s*ago', date_str)
     if days_ago_match:
         days = int(days_ago_match.group(1))
         return (now - timedelta(days=days)).date()
 
-    # Handle "xmo ago" (months ago)
     months_ago_match = re.match(r'(\d+)\s*mo(nths?)?\s*ago', date_str)
     if months_ago_match:
         months = int(months_ago_match.group(1))
         return (now - timedelta(days=months * 30)).date()
 
-    # Handle "on Month Day" format, assuming current year
     on_date_match = re.match(r'on\s+([a-z]{3,})\s+(\d+)(?:st|nd|rd|th)?', date_str)
     if on_date_match:
         month_name_str = on_date_match.group(1)
@@ -83,7 +71,6 @@ def parse_posting_date(date_str_raw):
             print(f"Warning: Could not parse 'on Month Day' format: '{date_str_raw}' due to {e}. Returning None.")
             return None
 
-    # Fallback for other direct date formats if any (less common on this site)
     try:
         return datetime.strptime(date_str_raw, "%b %d, %Y").date()
     except ValueError:
@@ -92,12 +79,7 @@ def parse_posting_date(date_str_raw):
     print(f"Warning: Could not parse posting date string: '{date_str_raw}'. Returning None.")
     return None
 
-
 def infer_job_type(tags_list, title):
-    """
-    Infers job type based on tags or title.
-    Defaults to "Full-Time".
-    """
     tags_lower = [tag.lower() for tag in tags_list]
     title_lower = title.lower()
 
@@ -110,10 +92,9 @@ def infer_job_type(tags_list, title):
         return "Part-Time"
     if "permanent" in tags_lower:
         return "Full-Time"
-    return "Full-Time" # Default
+    return "Full-Time"
 
 def check_if_job_exists(cursor, title, company, posting_date_obj):
-    """Checks if a job with the same title, company, and posting date already exists."""
     query = """
     SELECT id FROM public.jobs
     WHERE title = %s AND company = %s AND posting_date = %s;
@@ -123,10 +104,9 @@ def check_if_job_exists(cursor, title, company, posting_date_obj):
         return cursor.fetchone() is not None
     except psycopg2.Error as e:
         print(f"Error checking if job exists: {e}")
-        return False 
+        return False
 
 def insert_job_data(conn, job_data):
-    """Inserts a single job's data into the public.jobs table."""
     if not all([job_data.get('title'), job_data.get('company'), job_data.get('location'), job_data.get('posting_date')]):
         print(f"Skipping job due to missing required fields (title, company, location, or posting_date): {job_data.get('title')}")
         return False
@@ -137,7 +117,6 @@ def insert_job_data(conn, job_data):
     """
     try:
         with conn.cursor() as cursor:
-            # Duplicate check
             if check_if_job_exists(cursor, job_data['title'], job_data['company'], job_data['posting_date']):
                 print(f"Duplicate job found, skipping: {job_data['title']} at {job_data['company']}")
                 return False
@@ -146,27 +125,23 @@ def insert_job_data(conn, job_data):
                 job_data['title'],
                 job_data['company'],
                 job_data['location'],
-                job_data['posting_date'], # This should be a date object
-                job_data.get('job_type'), # .get() allows for NULL if not found
-                job_data.get('tags_str')  # .get() allows for NULL
+                job_data['posting_date'],
+                job_data.get('job_type'),
+                job_data.get('tags_str')
             ))
         conn.commit()
         print(f"Successfully inserted: {job_data['title']} at {job_data['company']}")
         return True
     except psycopg2.Error as e:
-        conn.rollback() # Rollback on error
+        conn.rollback()
         print(f"Error inserting job data for '{job_data.get('title')}': {e}")
         return False
-    except Exception as e: # Catch other potential errors
+    except Exception as e:
         conn.rollback()
         print(f"An unexpected error occurred during insertion for '{job_data.get('title')}': {e}")
         return False
 
-
 def scrape_actuary_list_to_db():
-    """
-    Scrapes job listings from Actuary List and saves them to PostgreSQL.
-    """
     print("Starting Actuary List scraper for pages 1–6, then optional manual input.")
 
     db_conn = get_db_connection()
@@ -177,7 +152,6 @@ def scrape_actuary_list_to_db():
     try:
         service = ChromeService(ChromeDriverManager().install())
         options = webdriver.ChromeOptions()
-        # options.add_argument("--headless")  # Enable if you want headless mode
         options.add_argument("--disable-gpu")
         options.add_argument("--window-size=1280,1024")
         options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
@@ -194,7 +168,6 @@ def scrape_actuary_list_to_db():
         try:
             driver.get(page_url)
             time.sleep(3)
-
             html_source = driver.page_source
             soup = BeautifulSoup(html_source, "html.parser")
             job_cards = soup.select("div.Job_job-card__YgDAV")
@@ -238,11 +211,9 @@ def scrape_actuary_list_to_db():
         except Exception as e:
             print(f"Error scraping page {page_number}: {e}")
 
-    # --- Automatically scrape pages 1–5 ---
     for page in range(1, 6):
         scrape_page(page)
 
-    # --- Optional user input for further scraping ---
     while True:
         user_input = input("\nEnter a page number to scrape (or type 'exit' to quit): ").strip()
         if user_input.lower() == 'exit':
