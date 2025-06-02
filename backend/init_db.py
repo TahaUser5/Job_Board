@@ -1,6 +1,8 @@
 from app import app
 from models import db
 
+# Initialize the database schema
 with app.app_context():
-    db.create_all()
-    print("Database table created.")
+    print("Creating database tables...")
+    db.create_all()  # Create all tables defined in models.py
+    print("Database tables created successfully.")

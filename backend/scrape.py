@@ -11,6 +11,7 @@ import time
 import re
 from bs4 import BeautifulSoup
 
+# Database configuration for PostgreSQL connection
 DB_CONFIG = {
     "dbname": "jobboard",
     "user": "postgres",
@@ -20,6 +21,7 @@ DB_CONFIG = {
 }
 
 def get_db_connection():
+    # Establish connection to the database
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         print("Successfully connected to PostgreSQL database.")
@@ -29,6 +31,7 @@ def get_db_connection():
         return None
 
 def parse_posting_date(date_str_raw):
+    # Parse various posting date formats into a date object
     date_str = date_str_raw.lower().replace('posted', '').strip()
     now = datetime.now()
 
@@ -36,6 +39,7 @@ def parse_posting_date(date_str_raw):
         print(f"Warning: Empty posting date string received ('{date_str_raw}'). Returning None.")
         return None
 
+    # Handle relative date formats like "today", "yesterday", "xh ago", etc.
     if "today" in date_str or "0 days ago" in date_str:
         return now.date()
     elif "yesterday" in date_str or "1 day ago" in date_str:
@@ -56,6 +60,7 @@ def parse_posting_date(date_str_raw):
         months = int(months_ago_match.group(1))
         return (now - timedelta(days=months * 30)).date()
 
+    # Handle "on Month Day" format
     on_date_match = re.match(r'on\s+([a-z]{3,})\s+(\d+)(?:st|nd|rd|th)?', date_str)
     if on_date_match:
         month_name_str = on_date_match.group(1)
@@ -71,6 +76,7 @@ def parse_posting_date(date_str_raw):
             print(f"Warning: Could not parse 'on Month Day' format: '{date_str_raw}' due to {e}. Returning None.")
             return None
 
+    # Fallback for direct date formats
     try:
         return datetime.strptime(date_str_raw, "%b %d, %Y").date()
     except ValueError:
@@ -80,6 +86,7 @@ def parse_posting_date(date_str_raw):
     return None
 
 def infer_job_type(tags_list, title):
+    # Infer job type based on tags or title
     tags_lower = [tag.lower() for tag in tags_list]
     title_lower = title.lower()
 
@@ -95,6 +102,7 @@ def infer_job_type(tags_list, title):
     return "Full-Time"
 
 def check_if_job_exists(cursor, title, company, posting_date_obj):
+    # Check if a job with the same title, company, and posting date already exists
     query = """
     SELECT id FROM public.jobs
     WHERE title = %s AND company = %s AND posting_date = %s;
@@ -107,6 +115,7 @@ def check_if_job_exists(cursor, title, company, posting_date_obj):
         return False
 
 def insert_job_data(conn, job_data):
+    # Insert job data into the database
     if not all([job_data.get('title'), job_data.get('company'), job_data.get('location'), job_data.get('posting_date')]):
         print(f"Skipping job due to missing required fields (title, company, location, or posting_date): {job_data.get('title')}")
         return False
@@ -142,6 +151,9 @@ def insert_job_data(conn, job_data):
         return False
 
 def scrape_actuary_list_to_db():
+    """
+    Scrapes job listings from Actuary List and saves them to the database.
+    """
     print("Starting Actuary List scraper for pages 1–6, then optional manual input.")
 
     db_conn = get_db_connection()
@@ -163,6 +175,7 @@ def scrape_actuary_list_to_db():
         return
 
     def scrape_page(page_number):
+        # Scrape a single page of job listings
         page_url = f"https://www.actuarylist.com?page={page_number}"
         print(f"\nScraping Page {page_number}: {page_url}")
         try:

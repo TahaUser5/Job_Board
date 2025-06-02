@@ -1,15 +1,22 @@
 from flask import Blueprint, request, jsonify
 from models import db, Job
 from datetime import datetime
-
+from scrape import scrape
 jobs_bp = Blueprint("jobs", __name__)
 
 @jobs_bp.route("/health", methods=["GET"])
 def health_check():
+    """
+    Health check route to verify if the backend is running.
+    """
     return jsonify({"status": "Backend is running!"}), 200
 
 @jobs_bp.route("/", methods=["GET"])
 def get_jobs():
+    """
+    Fetches all jobs or filters jobs based on query parameters.
+    Supports filtering by job_type, location, and tags.
+    """
     job_type = request.args.get("job_type")
     location = request.args.get("location")
     tag = request.args.get("tag")
@@ -33,6 +40,10 @@ def get_jobs():
 
 @jobs_bp.route("/", methods=["POST"])
 def add_job():
+    """
+    Creates a new job entry in the database.
+    Validates required fields before insertion.
+    """
     data = request.get_json()
     required_fields = ["title", "company", "location", "posting_date", "job_type"]
 
@@ -57,6 +68,10 @@ def add_job():
 
 @jobs_bp.route("/<int:job_id>", methods=["PUT", "PATCH"])
 def update_job(job_id):
+    """
+    Updates an existing job entry in the database.
+    Validates the job ID and updates fields dynamically.
+    """
     job = Job.query.get(job_id)
     if not job:
         return jsonify({"error": "Job not found"}), 404
@@ -76,9 +91,14 @@ def update_job(job_id):
 
 @jobs_bp.route("/<int:job_id>", methods=["DELETE"])
 def delete_job(job_id):
+    """
+    Deletes a job entry from the database.
+    Validates the job ID before deletion.
+    """
     job = Job.query.get(job_id)
     if not job:
         return jsonify({"error": "Job not found"}), 404
+
     db.session.delete(job)
     db.session.commit()
     return jsonify({"message": "Job deleted successfully"}), 204
