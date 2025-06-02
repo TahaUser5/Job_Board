@@ -1,7 +1,8 @@
 from flask import Blueprint, request, jsonify
 from models import db, Job
 from datetime import datetime
-from scrape import scrape
+from scrape import scrape_actuary_list_to_db
+
 jobs_bp = Blueprint("jobs", __name__)
 
 @jobs_bp.route("/health", methods=["GET"])
