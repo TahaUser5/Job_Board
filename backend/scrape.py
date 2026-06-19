@@ -9,21 +9,32 @@ import psycopg2
 from datetime import datetime, timedelta
 import time
 import re
+import os
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
+from urllib.parse import urlparse
 
-# Database configuration for PostgreSQL connection
-DB_CONFIG = {
-    "dbname": "jobboard",
-    "user": "postgres",
-    "password": "70126633",
-    "host": "localhost",
-    "port": "5432"
-}
+# Load .env so DATABASE_URL is available
+load_dotenv()
+
+# Parse connection info from DATABASE_URL env var — never hardcode credentials
+def _parse_db_config():
+    url = os.environ.get("DATABASE_URL", "")
+    if not url:
+        raise RuntimeError("DATABASE_URL environment variable is not set.")
+    parsed = urlparse(url)
+    return {
+        "dbname": parsed.path.lstrip("/"),
+        "user": parsed.username,
+        "password": parsed.password,
+        "host": parsed.hostname,
+        "port": str(parsed.port or 5432),
+    }
 
 def get_db_connection():
-    # Establish connection to the database
+    # Establish connection to the database using env-based config
     try:
-        conn = psycopg2.connect(**DB_CONFIG)
+        conn = psycopg2.connect(**_parse_db_config())
         print("Successfully connected to PostgreSQL database.")
         return conn
     except psycopg2.Error as e:
@@ -164,6 +175,7 @@ def scrape_actuary_list_to_db():
     try:
         service = ChromeService(ChromeDriverManager().install())
         options = webdriver.ChromeOptions()
+        options.add_argument("--headless=new")  # run without a visible browser window
         options.add_argument("--disable-gpu")
         options.add_argument("--window-size=1280,1024")
         options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")

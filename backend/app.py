@@ -8,10 +8,11 @@ from sqlalchemy.sql import text
 import os
 
 # Load environment variables from .env file
-load_dotenv()  
+load_dotenv(override=True)
 
 app = Flask(__name__)
-CORS(app)  # Enable Cross-Origin Resource Sharing for frontend-backend communication
+# Restrict CORS to the local frontend only; expand this list for production origins
+CORS(app, origins=["http://localhost:3000"])
 
 # Configure the database connection using environment variables
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")  
@@ -30,8 +31,7 @@ def health_check():
     Executes a simple SQL query to ensure the database is reachable.
     """
     try:
-        with app.app_context():
-            db.session.execute(text("SELECT 1"))  # Execute raw SQL wrapped in text()
+        db.session.execute(text("SELECT 1"))  # Execute raw SQL wrapped in text()
         return jsonify({"status": "App is running and database is connected!"}), 200
     except Exception as e:
         return jsonify({"status": "Error", "message": str(e)}), 500
@@ -44,4 +44,6 @@ def home():
     return jsonify({"message": "Welcome to the job board backend!"})
 
 if __name__ == "__main__":
-    app.run(debug=True)  # Run the app in debug mode for development
+    # Set DEBUG via env var; never hardcode debug=True for production
+    debug_mode = os.getenv("FLASK_DEBUG", "false").lower() == "true"
+    app.run(debug=debug_mode)

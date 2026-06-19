@@ -1,0 +1,3 @@
+ALTER USER postgres PASSWORD '11223344';
+CREATE DATABASE jobboard;
+\q
